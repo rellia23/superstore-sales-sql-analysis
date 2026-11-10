@@ -1,4 +1,4 @@
--- Week 2: window functions on the Superstore dataset
+-- Week 2 Day 1: window functions on the Superstore dataset
 -- Run after setup.sql (uses superstore_raw, customers and products)
 -- Format: question, query, finding
 
@@ -104,3 +104,125 @@ ORDER BY first_order_year;
 -- and 679 of the 690 customers active in 2018 had ordered before, so growth
 -- came from existing customers buying more. Note: the data starts in 2015, so
 -- "first order in 2015" may include customers who started earlier.
+
+-- Week 2 Day 2: LAG/LEAD functions on the Superstore dataset
+-- LAG(col, n) looks n rows back; LEAD looks n rows ahead.
+-- Without PARTITION BY, the window function works on the rows taht reach the SELECT clause. With it, the window is limited to each partition.
+-- On the first row, LAG returns NULL because there is no previous row.
+-- Q1: year-over-year sales (one finding: yearly growth %)
+WITH yearly AS (
+  SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
+         SUM(sales) AS sales
+  FROM superstore_raw
+  GROUP BY EXTRACT(YEAR FROM order_date_clean)
+)
+SELECT yr, sales,
+       LAG(sales) OVER (ORDER BY yr) AS prev_sales
+FROM yearly;
+-- Finding: The 2015 return NULL for previous sales, as expected. 
+WITH yearly AS (
+  SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
+         SUM(sales) AS sales
+  FROM superstore_raw
+  GROUP BY EXTRACT(YEAR FROM order_date_clean)
+),
+with_prev AS (
+  SELECT yr, sales,
+         LAG(sales) OVER (ORDER BY yr) AS prev_sales
+  FROM yearly
+)
+SELECT yr, sales, prev_sales,
+       ROUND( ( (sales - prev_sales) / prev_sales * 100 )::numeric, 1 ) AS growth_pct
+FROM with_prev
+ORDER BY yr;
+-- Finding: YoY growth. Checked: 2016 -4.3%, 2017 +30.6%, 2018 +20.3%.
+
+-- Q2: LAG over the same month last year (ties to my seasonality fiding)
+WITH monthly AS (
+  SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
+         EXTRACT(MONTH FROM order_date_clean) AS mth,
+         SUM(sales) AS sales
+  FROM superstore_raw
+  GROUP BY EXTRACT(YEAR FROM order_date_clean), EXTRACT(MONTH FROM order_date_clean)
+)
+SELECT yr, mth, sales,
+       LAG(sales) OVER (PARTITION BY mth ORDER BY yr) AS same_month_last_year
+FROM monthly
+ORDER BY yr, mth;
+-- Finding : The NULL count is 12, all in 2015. Because there is no data before 2015.
+-- LAG returns the previous year for each month, so the first year of data has no previous year to compare to. This allows us to see how sales for each month compare to the same month in the previous year, highlighting seasonal trends and growth patterns.
+-- Like for September 2016 shows $63,133.60 in sales, and September 2015 shows $81,623.00, so there was a decrease in sales for that month.
+-- Each partition holds one month across the years, ordered by year. So the previous row is the same month in the previous year, and the default offset of 1 is enough.
+WITH monthly AS (
+  SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
+         EXTRACT(MONTH FROM order_date_clean) AS mth,
+         SUM(sales) AS sales
+  FROM superstore_raw
+  GROUP BY EXTRACT(YEAR FROM order_date_clean), EXTRACT(MONTH FROM order_date_clean)
+),
+with_prev AS (
+  SELECT yr, mth, sales,
+         LAG(sales) OVER (PARTITION BY mth ORDER BY yr) AS same_month_last_year
+  FROM monthly
+)
+SELECT yr, mth, sales, same_month_last_year,
+       ROUND( (sales - same_month_last_year)::numeric, 0 ) AS diff_usd,
+       ROUND( ( (sales - same_month_last_year)/same_month_last_year * 100 )::numeric, 1 ) AS yoy_pct
+FROM with_prev
+ORDER BY yr, mth;
+-- Finding: The highest percentage growth on 2017 was October (192.1%), February (192.3%), and May(189.1%). 
+-- And the months that added the most dollars on 2017 was May ($26,697), October($28,571) and December($21,196).
+-- February’s high yoy_pct comes from a low base, and Feb is the lowest month of the year in every year. The dollar gain (+11,027) is moderate next to Oct (+28,571) or May (+26,697).
+
+-- Q3: Days until a customer's next order (LEAD + PARTITION BY)
+WITH orders AS (
+  SELECT DISTINCT customer_id, order_id, order_date_clean
+  FROM superstore_raw
+),
+with_next AS (
+  SELECT customer_id, order_id, order_date_clean,
+         LEAD(order_date_clean) OVER (PARTITION BY customer_id ORDER BY order_date_clean, order_id) AS next_order_date
+  FROM orders
+)
+SELECT customer_id, order_id, order_date_clean, next_order_date,
+       next_order_date - order_date_clean AS days_to_next
+FROM with_next
+ORDER BY customer_id, order_date_clean, order_id;
+WITH orders AS (
+  SELECT DISTINCT customer_id, order_id, order_date_clean
+  FROM superstore_raw
+),
+with_next AS (
+  SELECT customer_id, order_id, order_date_clean,
+         LEAD(order_date_clean) OVER (PARTITION BY customer_id ORDER BY order_date_clean, order_id) AS next_order_date
+  FROM orders
+)
+SELECT COUNT(*) AS total_rows,
+       COUNT(next_order_date) AS rows_with_next
+FROM with_next;
+-- Finding: 4,922 orders; 793 have no next order (each customer's last order,
+-- one NULL per customer); 4,922 - 793 = 4,129 orders with a gap.
+WITH orders AS ( 
+  SELECT DISTINCT customer_id, order_id, order_date_clean
+  FROM superstore_raw
+),
+with_next AS (
+  SELECT customer_id, order_id, order_date_clean,
+         LEAD(order_date_clean) OVER (PARTITION BY customer_id ORDER BY order_date_clean, order_id) AS next_order_date
+  FROM orders
+),
+gaps AS (
+  SELECT customer_id, next_order_date - order_date_clean AS days_to_next
+  FROM with_next
+)
+SELECT COUNT(days_to_next) AS n_gaps,
+       ROUND(AVG(days_to_next), 1) AS mean_days,
+       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY days_to_next) AS median_days
+FROM gaps;
+-- Finding: across 4,129 gaps between consecutive orders, the median gap is 129 days
+-- and the mean is 190.8 days. Half of all gaps are 129 days or shorter; a smaller number
+-- of very long gaps pulls the mean upward.
+-- Checks: 4,922 orders, 793 NULLs (one per customer), 4,129 gaps = 4,922 - 793.
+-- Hand-check: AA-10315, 2015-03-31 to 2015-09-15 = 153 + 15 = 168 days, matches days_to_next.
+-- Customers with many orders contribute many gaps, so frequent buyers weigh more in these numbers than occasional ones.
+-- A gap only exists between two orders. A customer who bought once and never returned has no gap at all, so the data says nothing about how long people stay away.

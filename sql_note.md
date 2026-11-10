@@ -72,3 +72,8 @@ OVER (...) is required. ROW_NUMBER() alone gives an error.
 You can't filter on a window function in the same query level. WHERE rn <= 3 only works outside the CTE, where rn already exists.
 ROW_NUMBER on tied values is arbitrary. Add a tiebreaker column inside OVER so the result is the same on every run: ORDER BY orders DESC, customer_id. In my output without a tiebreaker, the row numbers within the 13-order group jumped around (4, 2, 3, 5).
 Check the counts. 12 rows for "top 3 in 4 regions", 793 rows for "one row per customer".
+
+Week 2 Day 2: LAG/LEAD functions on the Superstore dataset
+LAG(col, n) looks n rows back; LEAD looks n rows ahead.
+Without PARTITION BY, the window function works on the rows taht reach the SELECT clause. With it, the window is limited to each partition.
+On the first row, LAG returns NULL because there is no previous row.
