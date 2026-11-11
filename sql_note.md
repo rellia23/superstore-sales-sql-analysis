@@ -77,3 +77,8 @@ Week 2 Day 2: LAG/LEAD functions on the Superstore dataset
 LAG(col, n) looks n rows back; LEAD looks n rows ahead.
 Without PARTITION BY, the window function works on the rows taht reach the SELECT clause. With it, the window is limited to each partition.
 On the first row, LAG returns NULL because there is no previous row.
+
+Week 2 Day 3
+A running total is SUM(...) OVER (ORDER BY ...). The frame ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW means "from the first row to the current row".
+A 3-month moving average uses ROWS BETWEEN 2 PRECEDING AND CURRENT ROW. Why is it 2, not 3? Because ROWS BETWEEN 2 PRECEDING AND CURRENT ROW means the 2 rows before the current row, plus the current row itself, which makes 3 rows in total.
+NTILE(4) splits the rows into 4 groups of equal size, not equal sales.

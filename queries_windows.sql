@@ -226,3 +226,60 @@ FROM gaps;
 -- Hand-check: AA-10315, 2015-03-31 to 2015-09-15 = 153 + 15 = 168 days, matches days_to_next.
 -- Customers with many orders contribute many gaps, so frequent buyers weigh more in these numbers than occasional ones.
 -- A gap only exists between two orders. A customer who bought once and never returned has no gap at all, so the data says nothing about how long people stay away.
+
+-- Week 2 Day 3: SUM (...) OVER (ORDER BY ...), ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+-- Q1: Running total monthly sales 
+WITH monthly AS (
+  SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
+         EXTRACT(MONTH FROM order_date_clean) AS mth,
+         SUM(sales) AS sales
+  FROM superstore_raw
+  GROUP BY EXTRACT(YEAR FROM order_date_clean), EXTRACT(MONTH FROM order_date_clean)
+)
+SELECT yr, mth, sales,
+       SUM(sales) OVER (ORDER BY yr, mth
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total
+FROM monthly
+ORDER BY yr, mth;
+-- Finding:  running total of monthly sales. Checks: 48 rows; Dec 2015 = 479,856.21 (2015 total);
+-- last row = 2,261,536.78 (matches Week 1). Finding: first passed $1,000,000 in Mar 2017
+-- The running total is the cumulative sum of sales up to and including the current month, allowing us to see how sales have accumulated over time.
+
+-- Q2: Running total that restarts each year (PARTITION BY)
+WITH monthly AS (
+  SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
+         EXTRACT(MONTH FROM order_date_clean) AS mth,
+         SUM(sales) AS sales
+  FROM superstore_raw
+  GROUP BY EXTRACT(YEAR FROM order_date_clean), EXTRACT(MONTH FROM order_date_clean)
+) 
+SELECT yr, mth, sales,
+       SUM(sales) OVER (PARTITION BY yr ORDER BY mth
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total
+FROM monthly
+ORDER BY yr, mth;
+-- Wed Q2: running total restarting each year (PARTITION BY yr).
+-- Checks: 48 rows; Dec = each year's total (479,856.21 / 459,436.01 / 600,192.55 / 722,052.02);
+-- Jan = Jan's own sales; the four Decembers sum to 2,261,536.78.
+
+-- Q3: 3-month moving average 
+WITH cust AS (
+  SELECT customer_id, SUM(sales) AS total_sales
+  FROM superstore_raw
+  GROUP BY customer_id
+),
+ranked AS (
+  SELECT customer_id, total_sales,
+         NTILE(4) OVER (ORDER BY total_sales DESC, customer_id) AS quartile
+  FROM cust
+)
+SELECT quartile,
+       COUNT(*) AS n_customers,
+       ROUND(SUM(total_sales)::numeric, 2) AS quartile_sales,
+	                 ROUND( (SUM(total_sales) / COUNT(*))::numeric, 2 ) AS avg_per_customer,
+            ROUND( (100 * SUM(total_sales) / SUM(SUM(total_sales)) OVER ())::numeric, 1 ) AS pct_of_sales
+FROM ranked
+GROUP BY quartile
+ORDER BY quartile; 
+-- Finding: The 44.5% from Week 1 measures the top 5% of order lines. This result measures the top 25% of customers, a different unit. 
+-- The top 25% of lines would hold at least 44.5% of sales, so lines are more concentrated than customers.
