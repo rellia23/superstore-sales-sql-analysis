@@ -107,19 +107,9 @@ ORDER BY first_order_year;
 
 -- Week 2 Day 2: LAG/LEAD functions on the Superstore dataset
 -- LAG(col, n) looks n rows back; LEAD looks n rows ahead.
--- Without PARTITION BY, the window function works on the rows taht reach the SELECT clause. With it, the window is limited to each partition.
+-- Without PARTITION BY, the window function works on the rows that reach the SELECT clause. With it, the window is limited to each partition.
 -- On the first row, LAG returns NULL because there is no previous row.
 -- Q1: year-over-year sales (one finding: yearly growth %)
-WITH yearly AS (
-  SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
-         SUM(sales) AS sales
-  FROM superstore_raw
-  GROUP BY EXTRACT(YEAR FROM order_date_clean)
-)
-SELECT yr, sales,
-       LAG(sales) OVER (ORDER BY yr) AS prev_sales
-FROM yearly;
--- Finding: The 2015 return NULL for previous sales, as expected. 
 WITH yearly AS (
   SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
          SUM(sales) AS sales
@@ -135,9 +125,10 @@ SELECT yr, sales, prev_sales,
        ROUND( ( (sales - prev_sales) / prev_sales * 100 )::numeric, 1 ) AS growth_pct
 FROM with_prev
 ORDER BY yr;
--- Finding: YoY growth. Checked: 2016 -4.3%, 2017 +30.6%, 2018 +20.3%.
+-- Finding: The 2015 returns NULL for previous sales, as expected. 
+-- YoY growth. Checked: 2016 -4.3%, 2017 +30.6%, 2018 +20.3%.
 
--- Q2: LAG over the same month last year (ties to my seasonality fiding)
+-- Q2: LAG over the same month last year (ties to my seasonality finding)
 WITH monthly AS (
   SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
          EXTRACT(MONTH FROM order_date_clean) AS mth,
@@ -149,9 +140,9 @@ SELECT yr, mth, sales,
        LAG(sales) OVER (PARTITION BY mth ORDER BY yr) AS same_month_last_year
 FROM monthly
 ORDER BY yr, mth;
--- Finding : The NULL count is 12, all in 2015. Because there is no data before 2015.
+-- Finding: The NULL count is 12, all in 2015. Because there is no data before 2015.
 -- LAG returns the previous year for each month, so the first year of data has no previous year to compare to. This allows us to see how sales for each month compare to the same month in the previous year, highlighting seasonal trends and growth patterns.
--- Like for September 2016 shows $63,133.60 in sales, and September 2015 shows $81,623.00, so there was a decrease in sales for that month.
+-- Like for September 2016 shows $63,133.61 in sales, and September 2015 shows $81,623.53, so there was a 22.7% decrease in sales for that month.
 -- Each partition holds one month across the years, ordered by year. So the previous row is the same month in the previous year, and the default offset of 1 is enough.
 WITH monthly AS (
   SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
@@ -170,9 +161,9 @@ SELECT yr, mth, sales, same_month_last_year,
        ROUND( ( (sales - same_month_last_year)/same_month_last_year * 100 )::numeric, 1 ) AS yoy_pct
 FROM with_prev
 ORDER BY yr, mth;
--- Finding: The highest percentage growth on 2017 was October (192.1%), February (192.3%), and May(189.1%). 
--- And the months that added the most dollars on 2017 was May ($26,697), October($28,571) and December($21,196).
--- February’s high yoy_pct comes from a low base, and Feb is the lowest month of the year in every year. The dollar gain (+11,027) is moderate next to Oct (+28,571) or May (+26,697).
+-- Finding: The highest percentage growth on February 92.3%, October 92.1%, May 89.1%. 
+-- And the months that added the most dollars on 2017 was October +28,571, May +26,697, December +21,196.
+-- February’s high yoy_pct comes from a low base, and Feb is the lowest month of the year in 2015,2016 and 2018; in 2017 it is January. The dollar gain (+11,027) is moderate next to Oct (+28,571) or May (+26,697).
 
 -- Q3: Days until a customer's next order (LEAD + PARTITION BY)
 WITH orders AS (
@@ -263,6 +254,24 @@ ORDER BY yr, mth;
 -- Jan = Jan's own sales; the four Decembers sum to 2,261,536.78.
 
 -- Q3: 3-month moving average 
+WITH monthly AS (
+  SELECT EXTRACT(YEAR FROM order_date_clean) AS yr,
+         EXTRACT(MONTH FROM order_date_clean) AS mth,
+         SUM(sales) AS sales
+  FROM superstore_raw
+  GROUP BY EXTRACT(YEAR FROM order_date_clean), EXTRACT(MONTH FROM order_date_clean)
+)
+SELECT yr, mth, sales,
+       ROUND(AVG(sales) OVER (ORDER BY yr, mth
+                              ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)::numeric, 0) AS ma_3
+FROM monthly
+ORDER BY yr, mth;
+-- Checks: 48 rows; row 3 = 24,644 (hand: 73,931.4 / 3); rows 1-2 average 1 and 2 months.
+-- Finding: Sep to Oct 2015 sales fell 61.5% (81,624 to 31,453) but ma_3 fell only 1.6%
+-- (47,508 to 46,731). Smoothing shows the peak season but hides which month peaked;
+-- the smoothed peak is Nov 2015 (63,662).
+
+-- Q4: What are the top 25% of customers by sales? (NTILE)
 WITH cust AS (
   SELECT customer_id, SUM(sales) AS total_sales
   FROM superstore_raw
@@ -281,8 +290,12 @@ SELECT quartile,
 FROM ranked
 GROUP BY quartile
 ORDER BY quartile; 
--- Finding: The 44.5% from Week 1 measures the top 5% of order lines. This result measures the top 25% of customers, a different unit. 
--- The top 25% of lines would hold at least 44.5% of sales, so lines are more concentrated than customers.
+-- Finding: The top quartile (199 customers) holds 55.5% of sales, then 25.0%, 14.2% and 5.3%;
+-- the top half holds 80.5%. Average per customer is about $6,303 in the top quartile and $608
+-- in the bottom, roughly 10 times. Sizes are 199/198/198/198 (NTILE gives the extra row to
+-- the first group). Check: quartile sales add up to 2,261,536.78.
+-- Note: the 44.5% from Week 1 is the top 5% of order lines, a different unit, so the two
+-- numbers are not directly comparable.
 
 -- Week 2 Day 5
 SELECT region, ROUND(SUM(sales)::numeric, 2) AS sales,
