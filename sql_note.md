@@ -82,3 +82,15 @@ Week 2 Day 3
 A running total is SUM(...) OVER (ORDER BY ...). The frame ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW means "from the first row to the current row".
 A 3-month moving average uses ROWS BETWEEN 2 PRECEDING AND CURRENT ROW. Why is it 2, not 3? Because ROWS BETWEEN 2 PRECEDING AND CURRENT ROW means the 2 rows before the current row, plus the current row itself, which makes 3 rows in total.
 NTILE(4) splits the rows into 4 groups of equal size, not equal sales.
+
+Week 2 Day 4
+Power BI
+Power Query is for shaping data before it loads. DAX is for calculations after it loads.
+Why set the locale to US? What went wrong in Excel in Week 1?
+So that the Power BI can read it as decimal and not just integers. Excel read it not as decimal.
+Import mode vs DirectQuery: which one are you using, and why?
+I am using Import mode
+Findings at Power BI
+- the date swap: types looked right, but the values were wrong, and day/month data needs a day/month locale
+- how you caught it: order vs ship dates, then min 0 and max 7 on ship_days
+- the corrected finding: Sep, Nov and Dec are the top three months every year, the top month varies, and sales fell in 2016 before growing in 2017 and 2018
