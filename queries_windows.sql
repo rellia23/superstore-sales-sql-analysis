@@ -283,3 +283,13 @@ GROUP BY quartile
 ORDER BY quartile; 
 -- Finding: The 44.5% from Week 1 measures the top 5% of order lines. This result measures the top 25% of customers, a different unit. 
 -- The top 25% of lines would hold at least 44.5% of sales, so lines are more concentrated than customers.
+
+-- Week 2 Day 5
+SELECT region, ROUND(SUM(sales)::numeric, 2) AS sales,
+       COUNT(DISTINCT customer_id) AS customers
+FROM superstore_raw
+GROUP BY region
+ORDER BY sales DESC;
+-- Finding: West is highest (710,219.68), then East, Central and South (389,151.46).
+-- West and East together hold about 61% of sales, and South about 17%.
+-- South is lowest in sales and has the fewest customers (509 vs 626-681)

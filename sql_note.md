@@ -94,3 +94,6 @@ Findings at Power BI
 - the date swap: types looked right, but the values were wrong, and day/month data needs a day/month locale
 - how you caught it: order vs ship dates, then min 0 and max 7 on ship_days
 - the corrected finding: Sep, Nov and Dec are the top three months every year, the top month varies, and sales fell in 2016 before growing in 2017 and 2018
+
+Week 2 Day 5
+-- a distinct count in a Total row is recalculated, not summed, so the regions overlap but the total doesn’t double-count.
