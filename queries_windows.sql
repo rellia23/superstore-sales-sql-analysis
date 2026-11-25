@@ -271,7 +271,7 @@ ORDER BY yr, mth;
 -- (47,508 to 46,731). Smoothing shows the peak season but hides which month peaked;
 -- the smoothed peak is Nov 2015 (63,662).
 
--- Q4: What are the top 25% of customers by sales? (NTILE)
+-- Q4: What are the Customer quartiles by sales? (NTILE)
 WITH cust AS (
   SELECT customer_id, SUM(sales) AS total_sales
   FROM superstore_raw
