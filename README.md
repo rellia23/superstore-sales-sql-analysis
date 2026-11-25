@@ -19,7 +19,8 @@ SQL analysis of four years of retail sales, built in PostgreSQL and cross-checke
 - 9,800 order lines from a global retailer, 4 years of complete data (2015 to 2018), 18 columns.
 - One row is one product line within an order (about 4,922 orders and 793 customers), so counting rows, orders, and customers gives different answers.
 - The raw CSV isn't in this repo because of the dataset's license. Download it from Kaggle.
-- Tools used: PostgreSQL and pgAdmin, with Excel to cross-check the totals.
+- The Power BI dashboard is in [dashboard/](dashboard/). It shows the highest and lowest sales months each year, the highest and lowest sales by region, and yearly sales changes. Its totals (sales of 2,261,536.78) match the SQL and Excel results. The folder contains superstore_dashboard.pbix, dashboard_overview.png, and a README with a question table.
+- Tools used: PostgreSQL and pgAdmin, with Excel to cross-check the totals, and Power BI for the dashboard.
 
 ## Data quality notes
 
@@ -34,7 +35,7 @@ SQL analysis of four years of retail sales, built in PostgreSQL and cross-checke
 1. Sales depend on a few large purchases: the top 5% of lines bring in 44.5% of revenue, and the median line is only $54.49.
 2. South has the lowest sales because it has the fewest customers (509) and they order least often (1.6 orders each vs 2.3 in West). Order size is not the issue, South's $480 per order is the second highest.
 3. Top customers by sales are mostly one-big-purchase buyers. Each of the top customer's largest line is 58% to 93% of their total. Without it, four of the ten would fall below the average customer ($2,852); all four have 6 or fewer orders. Four others have 9 to 12 orders, so their totals combine repeat buying with big lines.
-4. Repeat customers (98% of customers) With total sales of $2,256,355.03 for Repeat customers and $5,181.75 for One-time customers, the average One-time customer spends $398.60 and Repeat customers spend $2,892.76 spend about 7 times more, mostly through order frequency.
+4. Repeat customers, 98% of customers, generated $2,256,355.03 of sales, versus $5,181.75 from one-time customers. The average repeat customer spends $2,892.76, about 7.3 times as much as the average one-time customer ($398.60).
 
 ## How to run
 
